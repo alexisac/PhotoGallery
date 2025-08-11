@@ -75,4 +75,8 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     // https://mvnrepository.com/artifact/androidx.compose.material/material
     implementation("androidx.compose.material:material:1.7.8")
+    // https://mvnrepository.com/artifact/io.coil-kt/coil-compose
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    // https://mvnrepository.com/artifact/androidx.compose.foundation/foundation
+    implementation("androidx.compose.foundation:foundation:1.7.8")
 }
