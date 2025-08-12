@@ -1,4 +1,4 @@
-package com.example.photogallery.utils
+package com.example.photogallery.features.galleryScreen.utils
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
@@ -11,7 +11,7 @@ import androidx.core.net.toUri
 import com.example.photogallery.model.PhotoFilter
 import java.io.File
 
-object Utils {
+object GalleryFileUtils {
 
     fun newImageFile(galleryDir: File, suffix: String, extension: String) =
         File(galleryDir, "img_${System.currentTimeMillis()}$suffix.${extension.lowercase()}")

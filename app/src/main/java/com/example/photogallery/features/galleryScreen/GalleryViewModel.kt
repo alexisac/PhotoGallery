@@ -11,9 +11,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.photogallery.features.galleryScreen.utils.GalleryFileUtils
 import com.example.photogallery.model.PhotoFilter
 import com.example.photogallery.utils.Strings
-import com.example.photogallery.utils.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -48,7 +48,7 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
         if (uris.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
             val persisted = uris.mapNotNull { src ->
-                runCatching { Utils.copyToAppStorage(app.contentResolver, galleryDir, src) }.getOrNull()
+                runCatching { GalleryFileUtils.copyToAppStorage(app.contentResolver, galleryDir, src) }.getOrNull()
             }
             if (persisted.isNotEmpty()) {
                 withContext(Dispatchers.Main) {
@@ -70,7 +70,7 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
             runCatching {
                 val srcFile = File(requireNotNull(srcUri.path) { "Invalid uri path: $srcUri" })
                 val extension = srcFile.extension.ifEmpty { "jpg" }
-                val dst = Utils.newImageFile(galleryDir, suffix = "", extension = extension)
+                val dst = GalleryFileUtils.newImageFile(galleryDir, suffix = "", extension = extension)
 
                 srcFile.inputStream().use { input ->
                     dst.outputStream().use { output -> input.copyTo(output) }
@@ -101,10 +101,10 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
                 val srcBitmap = BitmapFactory.decodeFile(srcPath) ?: return@launch
 
                 // aplic filtrul
-                val filtered = Utils.applyFilter(srcBitmap, filter)
+                val filtered = GalleryFileUtils.applyFilter(srcBitmap, filter)
 
                 // salvez in acelasi fisier
-                val dst = Utils.newImageFile(galleryDir, suffix = "_filtered", extension = "jpg")
+                val dst = GalleryFileUtils.newImageFile(galleryDir, suffix = "_filtered", extension = "jpg")
                 dst.outputStream().use { out ->
                     filtered.compress(Bitmap.CompressFormat.JPEG, 95, out)
                 }
