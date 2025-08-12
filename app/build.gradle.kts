@@ -79,4 +79,6 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     // https://mvnrepository.com/artifact/androidx.compose.foundation/foundation
     implementation("androidx.compose.foundation:foundation:1.7.8")
+    // https://mvnrepository.com/artifact/androidx.compose.material/material-icons-extended
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
 }
