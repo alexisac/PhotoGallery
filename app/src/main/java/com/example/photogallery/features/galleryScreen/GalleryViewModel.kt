@@ -1,6 +1,12 @@
 package com.example.photogallery.features.galleryScreen
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
@@ -9,6 +15,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.photogallery.model.PhotoFilter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -78,6 +85,66 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
                 onResult(0)
             }
         }
+    }
+
+    fun saveFilter(
+        index: Int,
+        filter: PhotoFilter,
+        onResult: (Int) -> Unit
+    ){
+        val current = _images.value
+        if(index !in current.indices) return
+        val srcUri = current[index]
+
+        viewModelScope.launch(Dispatchers.IO) {
+            // Citeste bitmap-ul sursa
+            val srcPath = requireNotNull(srcUri.path) { "Invalid uri path: $srcUri" }
+            val srcBitmap = BitmapFactory.decodeFile(srcPath) ?: return@launch
+
+            // aplic filtrul
+            val filtered = applyFilter(srcBitmap, filter)
+
+            // salvez in acelasi fisier
+            val dst = File(galleryDir, "img_${System.currentTimeMillis()}_filtered.jpg")
+            dst.outputStream().use { out ->
+                filtered.compress(Bitmap.CompressFormat.JPEG, 95, out)
+            }
+            val dstUri = dst.toUri()
+
+            // pun noua poza la inceputul listei
+            withContext(Dispatchers.Main) {
+                _images.update { listOf(dstUri) + it }
+                onResult(0)
+            }
+        }
+    }
+
+    private fun applyFilter(src: Bitmap, filter: PhotoFilter): Bitmap {
+        if (filter == PhotoFilter.None) return src
+        val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+        val matrix = when (filter) {
+            PhotoFilter.GrayScale -> ColorMatrix().apply { setSaturation(0f) }
+            PhotoFilter.Sepia -> ColorMatrix(floatArrayOf(
+                0.393f, 0.769f, 0.189f, 0f, 0f,
+                0.349f, 0.686f, 0.168f, 0f, 0f,
+                0.272f, 0.534f, 0.131f, 0f, 0f,
+                0f,     0f,     0f,     1f, 0f
+            ))
+            PhotoFilter.Invert -> ColorMatrix(floatArrayOf(
+                -1f, 0f,  0f,  0f, 255f,
+                0f,-1f, 0f,  0f, 255f,
+                0f, 0f,-1f,  0f, 255f,
+                0f, 0f, 0f,  1f,   0f
+            ))
+            PhotoFilter.None -> ColorMatrix()
+        }
+
+        paint.colorFilter = ColorMatrixColorFilter(matrix)
+        canvas.drawBitmap(src, 0f, 0f, paint)
+        return out
     }
 
     companion object{
