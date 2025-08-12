@@ -3,10 +3,6 @@ package com.example.photogallery.features.galleryScreen
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.Paint
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
@@ -16,6 +12,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.photogallery.model.PhotoFilter
+import com.example.photogallery.utils.Strings
+import com.example.photogallery.utils.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -28,14 +26,14 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
     val images: StateFlow<List<Uri>> = _images
 
     private val galleryDir: File by lazy {
-        File(app.filesDir, "myGalleryAppPictures").apply { mkdirs() }
+        File(app.filesDir, Strings.GALLERY_DIR_NAME).apply { mkdirs() }
     }
 
     init {
-        loadImages()
+        viewModelScope.launch { loadImages() }
     }
 
-    fun loadImages() {
+    suspend fun loadImages() = withContext(Dispatchers.IO) {
         val uris = galleryDir
             .listFiles { file -> file.isFile }
             ?.sortedByDescending { it.lastModified() }
@@ -44,21 +42,20 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
         _images.value = uris
     }
 
+    // acum e safe impotriva erorilor
+    // daca vor fi multe poze e safe, nu blocheaza thread-ul principal
     fun addUris(uris: List<Uri>) {
-        if(uris.isEmpty()) return
-
-        val persisted = uris.map { src -> copyToAppStorage(src) }
-        _images.update { it + persisted }
-    }
-
-    private fun copyToAppStorage(src: Uri): Uri {
-        val fileName = "img_${System.currentTimeMillis()}.jpg"
-        val destination = File(galleryDir, fileName)
-
-        app.contentResolver.openInputStream(src)?.use {input ->
-            destination.outputStream().use { output -> input.copyTo(output) }
+        if (uris.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val persisted = uris.mapNotNull { src ->
+                runCatching { Utils.copyToAppStorage(app.contentResolver, galleryDir, src) }.getOrNull()
+            }
+            if (persisted.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    _images.update { persisted + it }
+                }
+            }
         }
-        return destination.toUri()
     }
 
     fun duplicatePhoto(
@@ -70,19 +67,20 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
         val srcUri = current[index]
 
         viewModelScope.launch(Dispatchers.IO) {
-            val srcFile = File(requireNotNull(srcUri.path) { "Invalid uri path: $srcUri" })
-            val ext = srcFile.extension.ifEmpty { "jpg" }
-            val dst = File(galleryDir, "img_${System.currentTimeMillis()}.$ext")
+            runCatching {
+                val srcFile = File(requireNotNull(srcUri.path) { "Invalid uri path: $srcUri" })
+                val extension = srcFile.extension.ifEmpty { "jpg" }
+                val dst = Utils.newImageFile(galleryDir, suffix = "", extension = extension)
 
-            srcFile.inputStream().use { input ->
-                dst.outputStream().use { output -> input.copyTo(output) }
-            }
-            val dstUri = dst.toUri()
-
-            // pun noua poza la inceputul listei
-            withContext(Dispatchers.Main) {
-                _images.update { listOf(dstUri) + it }
-                onResult(0)
+                srcFile.inputStream().use { input ->
+                    dst.outputStream().use { output -> input.copyTo(output) }
+                }
+                dst.toUri()
+            }.onSuccess { newUri ->
+                withContext(Dispatchers.Main) {
+                    insertAtTop(newUri)
+                    onResult(0)
+                }
             }
         }
     }
@@ -90,61 +88,38 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
     fun saveFilter(
         index: Int,
         filter: PhotoFilter,
-        onResult: (Int) -> Unit
+        onResult: (Int) -> Unit = {}
     ){
         val current = _images.value
         if(index !in current.indices) return
         val srcUri = current[index]
 
         viewModelScope.launch(Dispatchers.IO) {
-            // Citeste bitmap-ul sursa
-            val srcPath = requireNotNull(srcUri.path) { "Invalid uri path: $srcUri" }
-            val srcBitmap = BitmapFactory.decodeFile(srcPath) ?: return@launch
+            runCatching {
+                // Citeste bitmap-ul sursa
+                val srcPath = requireNotNull(srcUri.path) { "Invalid uri path: $srcUri" }
+                val srcBitmap = BitmapFactory.decodeFile(srcPath) ?: return@launch
 
-            // aplic filtrul
-            val filtered = applyFilter(srcBitmap, filter)
+                // aplic filtrul
+                val filtered = Utils.applyFilter(srcBitmap, filter)
 
-            // salvez in acelasi fisier
-            val dst = File(galleryDir, "img_${System.currentTimeMillis()}_filtered.jpg")
-            dst.outputStream().use { out ->
-                filtered.compress(Bitmap.CompressFormat.JPEG, 95, out)
-            }
-            val dstUri = dst.toUri()
-
-            // pun noua poza la inceputul listei
-            withContext(Dispatchers.Main) {
-                _images.update { listOf(dstUri) + it }
-                onResult(0)
+                // salvez in acelasi fisier
+                val dst = Utils.newImageFile(galleryDir, suffix = "_filtered", extension = "jpg")
+                dst.outputStream().use { out ->
+                    filtered.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                }
+                dst.toUri()
+            }.getOrNull()?.let { newUri ->
+                withContext(Dispatchers.Main) {
+                    insertAtTop(newUri)
+                    onResult(0)
+                }
             }
         }
     }
 
-    private fun applyFilter(src: Bitmap, filter: PhotoFilter): Bitmap {
-        if (filter == PhotoFilter.None) return src
-        val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(out)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-        val matrix = when (filter) {
-            PhotoFilter.GrayScale -> ColorMatrix().apply { setSaturation(0f) }
-            PhotoFilter.Sepia -> ColorMatrix(floatArrayOf(
-                0.393f, 0.769f, 0.189f, 0f, 0f,
-                0.349f, 0.686f, 0.168f, 0f, 0f,
-                0.272f, 0.534f, 0.131f, 0f, 0f,
-                0f,     0f,     0f,     1f, 0f
-            ))
-            PhotoFilter.Invert -> ColorMatrix(floatArrayOf(
-                -1f, 0f,  0f,  0f, 255f,
-                0f,-1f, 0f,  0f, 255f,
-                0f, 0f,-1f,  0f, 255f,
-                0f, 0f, 0f,  1f,   0f
-            ))
-            PhotoFilter.None -> ColorMatrix()
-        }
-
-        paint.colorFilter = ColorMatrixColorFilter(matrix)
-        canvas.drawBitmap(src, 0f, 0f, paint)
-        return out
+    private fun insertAtTop(uri: Uri) {
+        _images.update { listOf(uri) + it }
     }
 
     companion object{
