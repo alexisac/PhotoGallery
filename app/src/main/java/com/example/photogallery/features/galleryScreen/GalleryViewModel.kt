@@ -14,6 +14,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.photogallery.dbRoom.GalleryDB
 import com.example.photogallery.dbRoom.SubjectEntity
 import com.example.photogallery.dbRoom.SubjectWithCount
+import com.example.photogallery.features.galleryScreen.utils.CryptoUtils
 import com.example.photogallery.features.galleryScreen.utils.GalleryFileUtils
 import com.example.photogallery.model.PhotoFilter
 import com.example.photogallery.utils.Strings
@@ -193,6 +194,40 @@ class GalleryViewModel(private val app: Application) : AndroidViewModel(app) {
     fun clearError() {
         _errorMessage.value = null
     }
+
+    // salvez o poza noua criptata
+    fun addEncryptedPhoto(
+        src: Uri,
+        password: CharArray,
+        onDone: (Uri?) -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val dst = GalleryFileUtils.newImageFile(
+                galleryDir = galleryDir,
+                suffix = "",
+                extension = "enc"
+            )
+            val ok = CryptoUtils.encryptFile(
+                resolver = app.contentResolver,
+                src = src,
+                dstEnc = dst,
+                password = password)
+
+            withContext(Dispatchers.Main) {
+                if (ok) {
+                    val uri = dst.toUri()
+                    repo.upsertPhoto(uri.toString(), dst.lastModified())
+                    _images.update { listOf(uri) + it }
+                    onDone(uri)
+                }
+            }
+        }
+    }
+
+    suspend fun decryptPhoto(encFile: File, password: CharArray): ByteArray =
+        withContext(Dispatchers.IO) {
+            CryptoUtils.decryptToBytes(encFile, password)
+        }
 
     private fun insertAtTop(uri: Uri) {
         _images.update { listOf(uri) + it }

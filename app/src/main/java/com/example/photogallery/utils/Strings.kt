@@ -21,4 +21,9 @@ object Strings {
     const val DELETE = "Delete"
     const val OKAY = "Okay"
     const val ERROR = "Error"
+    const val ADD_PHOTOS = "Add photos"
+    const val ADD_ENCRYPTED_PHOTOS = "Add encrypted photos"
+    const val LOCK_ICON = "\uD83D\uDD12"
+    const val PASSWORD = "Password"
+    const val CONFIRM_PASSWORD = "Confirm password"
 }

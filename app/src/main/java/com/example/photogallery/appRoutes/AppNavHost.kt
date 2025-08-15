@@ -44,7 +44,8 @@ fun AppNavHost() {
             val index = navBackStackEntry.arguments?.getInt("index") ?: 0
             PhotoScreen(
                 viewModel = galleryViewModel,
-                startIndex = index
+                startIndex = index,
+                onClose = { navController.popBackStack() }
             )
         }
 
