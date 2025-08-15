@@ -13,4 +13,12 @@ object Strings {
     const val BLACK_WHITE = "Black & White"
     const val INVERT_COLORS = "Invert colors"
     const val ADD = "Add"
+    const val GALLERY = "Gallery"
+    const val SUBJECTS = "Subjects"
+    const val NEW_SUBJECT_NAME = "New subject name"
+    const val EMPTY_STRING = ""
+    const val CLOSE = "Close"
+    const val DELETE = "Delete"
+    const val OKAY = "Okay"
+    const val ERROR = "Error"
 }

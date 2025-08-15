@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import com.example.photogallery.model.PhotoFilter
 import com.example.photogallery.utils.Strings
 import com.example.photogallery.features.galleryScreen.components.ConfirmDialog
+import com.example.photogallery.features.galleryScreen.components.SubjectsSheet
 import com.example.photogallery.features.galleryScreen.utils.toColorFilterOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +52,7 @@ fun PhotoScreen(
     var showSaveConfirm by remember { mutableStateOf(false) }
     var selectedFilter by remember { mutableStateOf(PhotoFilter.None) }
     var filtersExpanded by remember { mutableStateOf(false) }
+    var showSubjects by remember { mutableStateOf(false) }
     val isEditing = selectedFilter != PhotoFilter.None
 
     val pagerState = rememberPagerState(
@@ -84,6 +86,19 @@ fun PhotoScreen(
                 if (isEditing) {
                     TextButton(onClick = { showSaveConfirm = true }) { Text(Strings.SAVE) }
                     TextButton(onClick = { selectedFilter = PhotoFilter.None }) { Text(Strings.CANCEL) }
+                }
+
+                // Choose subjects button
+                TextButton(onClick = { showSubjects = true }) { Text(Strings.SUBJECTS) }
+                if (showSubjects) {
+                    val currentUri = items.getOrNull(pagerState.currentPage)
+                    if (currentUri != null) {
+                        SubjectsSheet(
+                            viewModel = viewModel,
+                            photoUri = currentUri,
+                            onClose = { showSubjects = false }
+                        )
+                    } else showSubjects = false
                 }
 
                 Spacer(Modifier.weight(1f))
